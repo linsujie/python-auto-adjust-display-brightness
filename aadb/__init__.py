@@ -36,7 +36,7 @@ Supported options:
 """
 
 # Standard library modules.
-import ConfigParser
+import configparser
 import datetime
 import errno
 import functools
@@ -136,7 +136,7 @@ def load_config():
     :raises: :py:exc:`ConfigurationError` when the parsing or validation of the
              configuration file fails.
     """
-    parser = ConfigParser.ConfigParser()
+    parser = configparser.ConfigParser()
     config = {'location': {}, 'controllers': []}
     loaded_files = parser.read(map(os.path.expanduser, CONFIG_FILES))
     if not loaded_files:
@@ -218,65 +218,21 @@ def is_it_dark_outside(latitude, longitude, elevation):
     #
     # [1] http://rhodesmill.org/pyephem/quick.html#dates
     # [2] http://en.wikipedia.org/wiki/Daylight_saving_time
-    time_in_utc = datetime.datetime.utcnow()
-    logger.debug("Current time: %s", format_utc_as_local(time_in_utc))
-    # Convert the current UTC date/time to noon based on the local time.
-    local_time = datetime.datetime.now()
-    if local_time.hour >= 12:
-        noon_in_utc = time_in_utc - datetime.timedelta(hours=local_time.hour - 12,
-                                                       minutes=local_time.minute,
-                                                       seconds=local_time.second)
-    else:
-        noon_in_utc = time_in_utc + datetime.timedelta(hours=12 - local_time.hour,
-                                                       minutes=local_time.minute,
-                                                       seconds=local_time.second)
-    logger.debug("Noon today: %s", format_utc_as_local(noon_in_utc))
-    # Use PyEphem to calculate sunrise and sunset (in UTC).
     observer = ephem.Observer()
-    observer.date = noon_in_utc.strftime("%Y-%m-%d %H:%M:%S")
     observer.lat = str(latitude)
     observer.lon = str(longitude)
     observer.elev = elevation
     # Find the sunrise and sunset today (whether in the past or future).
-    sunrise = observer.previous_rising(ephem.Sun()).datetime()
-    logger.debug("Sunrise today: %s", format_utc_as_local(sunrise))
+    sunrise = observer.next_rising(ephem.Sun()).datetime()
+    logger.debug("Sunrise today: %s", sunrise)
     sunset = observer.next_setting(ephem.Sun()).datetime()
-    logger.debug("Sunset today: %s", format_utc_as_local(sunset))
-    if sunrise < time_in_utc < sunset:
+    logger.debug("Sunset today: %s", sunset)
+    if sunset < sunrise:
         logger.info("Based on your location it should be light outside right now.")
         return False
     else:
         logger.info("Based on your location it should be dark outside right now.")
         return True
-
-
-def format_utc_as_local(utc):
-    """
-    Shortcut to format a UTC date time as a user friendly local date time string.
-
-    :param utc: A :py:class:`datetime.datetime` object in UTC.
-    :returns: A human readable date time string in the current system's local
-              timezone.
-    """
-    return utc_to_local(utc).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def utc_to_local(utc):
-    """
-    Convert a date time in UTC to the current system's local timezone.
-
-    :param utc: A :py:class:`datetime.datetime` object in UTC.
-    :returns: A :py:class:`datetime.datetime` object in the local timezone.
-
-    Regrettably the Python standard library doesn't offer a function that does
-    this. The implementation of :py:func:`utc_to_local()` was based on the
-    StackOverflow thread `Convert UTC datetime string to local datetime
-    <http://stackoverflow.com/a/19238551/788200>`_.
-    """
-    epoch = time.mktime(utc.timetuple())
-    offset = datetime.datetime.fromtimestamp(epoch) - datetime.datetime.utcfromtimestamp(epoch)
-    return utc + offset
-
 
 class BrightnessController(object):
 
